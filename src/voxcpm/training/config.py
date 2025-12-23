@@ -3,10 +3,10 @@ from __future__ import annotations
 import argbind
 import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Union, Optional
 
 
-def load_yaml_config(path: str | Path) -> Dict[str, Any]:
+def load_yaml_config(path: Union[str, Path]) -> Dict[str, Any]:
     """
     Load a YAML configuration file into a dictionary suitable for argbind.
     """
@@ -18,7 +18,7 @@ def load_yaml_config(path: str | Path) -> Dict[str, Any]:
     return data
 
 
-def parse_args_with_config(config_path: str | Path | None = None):
+def parse_args_with_config(config_path: Optional[Union[str, Path]] = None):
     """
     Helper to unify CLI arguments and YAML configuration.
 

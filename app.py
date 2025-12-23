@@ -1,12 +1,16 @@
 import os
 import numpy as np
 import torch
-import gradio as gr  
+import gradio as gr
 import spaces
 from typing import Optional, Tuple
 from funasr import AutoModel
 from pathlib import Path
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Disable MPS to avoid "Output channels > 65536 not supported" error on macOS
+torch.backends.mps.enabled = False
+
 if os.environ.get("HF_REPO_ID", "").strip() == "":
     os.environ["HF_REPO_ID"] = "openbmb/VoxCPM1.5"
 
@@ -158,13 +162,13 @@ def create_demo_interface(demo: VoxCPMDemo):
         with gr.Accordion("📋 Quick Start Guide ｜快速入门", open=False, elem_id="acc_quick"):
             gr.Markdown("""
             ### How to Use ｜使用说明
-            1. **(Optional) Provide a Voice Prompt** - Upload or record an audio clip to provide the desired voice characteristics for synthesis.  
+            1. **(Optional) Provide a Voice Prompt** - Upload or record an audio clip to provide the desired voice characteristics for synthesis.
                **（可选）提供参考声音** - 上传或录制一段音频，为声音合成提供音色、语调和情感等个性化特征
-            2. **(Optional) Enter prompt text** - If you provided a voice prompt, enter the corresponding transcript here (auto-recognition available).  
+            2. **(Optional) Enter prompt text** - If you provided a voice prompt, enter the corresponding transcript here (auto-recognition available).
                **（可选项）输入参考文本** - 如果提供了参考语音，请输入其对应的文本内容（支持自动识别）。
-            3. **Enter target text** - Type the text you want the model to speak.  
+            3. **Enter target text** - Type the text you want the model to speak.
                **输入目标文本** - 输入您希望模型朗读的文字内容。
-            4. **Generate Speech** - Click the "Generate" button to create your audio.  
+            4. **Generate Speech** - Click the "Generate" button to create your audio.
                **生成语音** - 点击"生成"按钮，即可为您创造出音频。
             """)
 
@@ -172,27 +176,27 @@ def create_demo_interface(demo: VoxCPMDemo):
         with gr.Accordion("💡 Pro Tips ｜使用建议", open=False, elem_id="acc_tips"):
             gr.Markdown("""
             ### Prompt Speech Enhancement｜参考语音降噪
-            - **Enable** to remove background noise for a clean voice, with an external ZipEnhancer component. However, this will limit the audio sampling rate to 16kHz, restricting the cloning quality ceiling.  
+            - **Enable** to remove background noise for a clean voice, with an external ZipEnhancer component. However, this will limit the audio sampling rate to 16kHz, restricting the cloning quality ceiling.
               **启用**：通过 ZipEnhancer 组件消除背景噪音，但会将音频采样率限制在16kHz，限制克隆上限。
-            - **Disable** to preserve the original audio's all information, including background atmosphere, and support audio cloning up to 44.1kHz sampling rate.  
+            - **Disable** to preserve the original audio's all information, including background atmosphere, and support audio cloning up to 44.1kHz sampling rate.
               **禁用**：保留原始音频的全部信息，包括背景环境声，最高支持44.1kHz的音频复刻。
 
             ### Text Normalization｜文本正则化
-            - **Enable** to process general text with an external WeTextProcessing component.  
+            - **Enable** to process general text with an external WeTextProcessing component.
               **启用**：使用 WeTextProcessing 组件，可支持常见文本的正则化处理。
-            - **Disable** to use VoxCPM's native text understanding ability. For example, it supports phonemes input (For Chinese, phonemes are converted using pinyin, {ni3}{hao3}; For English, phonemes are converted using CMUDict, {HH AH0 L OW1}), try it!  
+            - **Disable** to use VoxCPM's native text understanding ability. For example, it supports phonemes input (For Chinese, phonemes are converted using pinyin, {ni3}{hao3}; For English, phonemes are converted using CMUDict, {HH AH0 L OW1}), try it!
               **禁用**：将使用 VoxCPM 内置的文本理解能力。如，支持音素输入（如中文转拼音：{ni3}{hao3}；英文转CMUDict：{HH AH0 L OW1}）和公式符号合成，尝试一下！
 
             ### CFG Value｜CFG 值
-            - **Lower CFG** if the voice prompt sounds strained or expressive, or instability occurs with long text input.  
+            - **Lower CFG** if the voice prompt sounds strained or expressive, or instability occurs with long text input.
               **调低**：如果提示语音听起来不自然或过于夸张，或者长文本输入出现稳定性问题。
             - **Higher CFG** for better adherence to the prompt speech style or input text, or instability occurs with too short text input.
               **调高**：为更好地贴合提示音频的风格或输入文本， 或者极短文本输入出现稳定性问题。
 
             ### Inference Timesteps｜推理时间步
-            - **Lower** for faster synthesis speed.  
+            - **Lower** for faster synthesis speed.
               **调低**：合成速度更快。
-            - **Higher** for better synthesis quality.  
+            - **Higher** for better synthesis quality.
               **调高**：合成质量更佳。
             """)
 
@@ -256,7 +260,6 @@ def create_demo_interface(demo: VoxCPMDemo):
             inputs=[text, prompt_wav, prompt_text, cfg_value, inference_timesteps, DoNormalizeText, DoDenoisePromptAudio],
             outputs=[audio_output],
             show_progress=True,
-            api_name="generate",
         )
         prompt_wav.change(fn=demo.prompt_wav_recognition, inputs=[prompt_wav], outputs=[prompt_text])
 

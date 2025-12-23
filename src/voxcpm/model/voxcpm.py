@@ -116,10 +116,8 @@ class VoxCPMModel(nn.Module):
         self.patch_size = config.patch_size
         self.device = config.device
         if not torch.cuda.is_available():
-            if torch.backends.mps.is_available():
-                self.device = "mps"
-            else:
-                self.device = "cpu"
+            # Force CPU on macOS to avoid MPS limitations (max 65536 channels)
+            self.device = "cpu"
         print(f"Running on device: {self.device}, dtype: {self.config.dtype}")
 
         # Text-Semantic LM
@@ -164,9 +162,9 @@ class VoxCPMModel(nn.Module):
 
         # Projection layers
         self.fsq_layer = ScalarQuantizationLayer(
-            config.lm_config.hidden_size, 
-            config.lm_config.hidden_size, 
-            config.scalar_quantization_latent_dim, 
+            config.lm_config.hidden_size,
+            config.lm_config.hidden_size,
+            config.scalar_quantization_latent_dim,
             config.scalar_quantization_scale
         )
         self.enc_to_lm_proj = nn.Linear(config.encoder_config.hidden_dim, config.lm_config.hidden_size)
@@ -393,7 +391,7 @@ class VoxCPMModel(nn.Module):
 
             audio, sr = torchaudio.load(prompt_wav_path)
             if audio.size(0) > 1:
-                audio = audio.mean(dim=0, keepdim=True)    
+                audio = audio.mean(dim=0, keepdim=True)
 
             if sr != self.sample_rate:
                 audio = torchaudio.functional.resample(audio, sr, self.sample_rate)
@@ -434,7 +432,7 @@ class VoxCPMModel(nn.Module):
         audio_mask = audio_mask.unsqueeze(0).to(self.device)
 
         target_text_length = len(self.text_tokenizer(target_text))
-        
+
         retry_badcase_times = 0
         while retry_badcase_times < retry_badcase_max_times:
             inference_result = self._inference(
@@ -465,12 +463,12 @@ class VoxCPMModel(nn.Module):
                     else:
                         break
                 else:
-                    break   
-                
+                    break
+
         if not streaming:
-            decode_audio = self.audio_vae.decode(latent_pred.to(torch.float32)).squeeze(1).cpu()  
-            yield decode_audio        
-    
+            decode_audio = self.audio_vae.decode(latent_pred.to(torch.float32)).squeeze(1).cpu()
+            yield decode_audio
+
     @torch.inference_mode()
     def build_prompt_cache(
         self,
@@ -479,11 +477,11 @@ class VoxCPMModel(nn.Module):
     ):
         """
         Build prompt cache for subsequent fast generation.
-        
+
         Args:
             prompt_text: prompt text (required)
             prompt_wav_path: prompt audio path (required)
-            
+
         Returns:
             prompt_cache: dict with prompt_text (raw text) and audio features.
                          Text tokenization will be done during generation for consistency.
@@ -495,7 +493,7 @@ class VoxCPMModel(nn.Module):
         audio, sr = torchaudio.load(prompt_wav_path)
         if audio.size(0) > 1:
             audio = audio.mean(dim=0, keepdim=True)
-            
+
         if sr != self.sample_rate:
             audio = torchaudio.functional.resample(audio, sr, self.sample_rate)
 
@@ -519,10 +517,10 @@ class VoxCPMModel(nn.Module):
             "prompt_text": prompt_text,
             "audio_feat": audio_feat,
         }
-        
+
         return prompt_cache
 
-    
+
     def merge_prompt_cache(
         self,
         original_cache: dict,
@@ -531,12 +529,12 @@ class VoxCPMModel(nn.Module):
     ):
         """
         Merge original prompt cache with newly generated content to stabilize voice.
-        
+
         Args:
             original_cache: original prompt cache
-            new_text: newly generated text 
+            new_text: newly generated text
             new_audio_feat: newly generated audio features
-            
+
         Returns:
             merged_cache: merged cache with prompt_text and audio_feat
         """
@@ -556,10 +554,10 @@ class VoxCPMModel(nn.Module):
             "prompt_text": merged_prompt_text,
             "audio_feat": merged_audio_feat,
         }
-        
+
         return merged_cache
 
-            
+
     def generate_with_prompt_cache(self, *args, **kwargs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return next(self._generate_with_prompt_cache(*args, streaming=False, **kwargs))
 
@@ -587,7 +585,7 @@ class VoxCPMModel(nn.Module):
     ) -> Generator[Tuple[torch.Tensor, torch.Tensor, Union[torch.Tensor, List[torch.Tensor]]], None, None]:
         """
         Generate audio using pre-built prompt cache.
-        
+
         Args:
             target_text: Text to convert to speech
             prompt_cache: Cache built by build_prompt_cache (can be None)
@@ -600,7 +598,7 @@ class VoxCPMModel(nn.Module):
             retry_badcase_ratio_threshold: Threshold for audio-to-text ratio
             streaming: Whether to return a generator of audio chunks
             streaming_prefix_len: Number of prefix audio patches to use for streaming mode
-            
+
         Returns:
             Generator of Tuple containing:
                 - Decoded audio tensor for the current step if ``streaming=True``, else final decoded audio tensor
@@ -618,7 +616,7 @@ class VoxCPMModel(nn.Module):
             prompt_audio_feat = prompt_cache["audio_feat"]
             prompt_text = prompt_cache["prompt_text"]
             text = prompt_text + target_text
-        
+
         text_token = torch.LongTensor(self.text_tokenizer(text))
         text_token = torch.cat(
             [
@@ -631,7 +629,7 @@ class VoxCPMModel(nn.Module):
             ],
             dim=-1,
         )
-        
+
         target_text_token = torch.LongTensor(self.text_tokenizer(target_text))
 
         audio_length = prompt_audio_feat.size(0)
@@ -651,7 +649,7 @@ class VoxCPMModel(nn.Module):
         text_mask = text_mask.unsqueeze(0).to(self.device)
         audio_feat = audio_feat.unsqueeze(0).to(self.device).to(get_dtype(self.config.dtype))
         audio_mask = audio_mask.unsqueeze(0).to(self.device)
-    
+
         # run inference
         target_text_length = len(self.text_tokenizer(target_text))
         retry_badcase_times = 0
@@ -705,7 +703,7 @@ class VoxCPMModel(nn.Module):
 
     def inference(self, *args, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         return next(self._inference(*args, streaming=False, **kwargs))
-    
+
     def inference_streaming(self, *args, **kwargs) -> Generator[Tuple[torch.Tensor, List[torch.Tensor]], None, None]:
         return self._inference(*args, streaming=True, **kwargs)
 
@@ -724,10 +722,10 @@ class VoxCPMModel(nn.Module):
         streaming_prefix_len: int = 3,
     ) -> Generator[Tuple[torch.Tensor, Union[torch.Tensor, List[torch.Tensor]]], None, None]:
         """Core inference method for audio generation.
-        
+
         This is the main inference loop that generates audio features
         using the language model and diffusion transformer.
-        
+
         Args:
             text: Input text tokens
             text_mask: Mask for text tokens
@@ -738,7 +736,7 @@ class VoxCPMModel(nn.Module):
             inference_timesteps: Number of diffusion steps
             cfg_value: Classifier-free guidance value
             streaming: Whether to yield each step latent feature or just the final result
-            
+
         Returns:
             Generator of Tuple containing:
                 - Predicted latent feature at the current step if ``streaming=True``, else final latent features
@@ -748,12 +746,12 @@ class VoxCPMModel(nn.Module):
 
         feat_embed = self.feat_encoder(feat)  # [b, t, h_feat]
         feat_embed = self.enc_to_lm_proj(feat_embed)
-        
+
         if self.config.lm_config.use_mup:
             scale_emb = self.config.lm_config.scale_emb
         else:
             scale_emb = 1.0
-       
+
         text_embed = self.base_lm.embed_tokens(text) * scale_emb
         combined_embed = text_mask.unsqueeze(-1) * text_embed + feat_mask.unsqueeze(-1) * feat_embed
 
@@ -777,11 +775,11 @@ class VoxCPMModel(nn.Module):
             is_causal=True,
         )
         self.base_lm.kv_cache.fill_caches(kv_cache_tuple)
-        
+
         enc_outputs = self.fsq_layer(enc_outputs) * feat_mask.unsqueeze(-1) + enc_outputs * text_mask.unsqueeze(-1)
         lm_hidden = enc_outputs[:, -1, :]
 
-         
+
         residual_enc_outputs, residual_kv_cache_tuple = self.residual_lm(
             inputs_embeds=enc_outputs + feat_mask.unsqueeze(-1) * feat_embed,
             is_causal=True,
@@ -804,10 +802,10 @@ class VoxCPMModel(nn.Module):
             ).transpose(
                 1, 2
             )  # [b, p, d]
-            
+
             curr_embed = self.feat_encoder(pred_feat.unsqueeze(1))  # b, 1, c
             curr_embed = self.enc_to_lm_proj(curr_embed)
-            
+
             pred_feat_seq.append(pred_feat.unsqueeze(1))  # b, 1, p, d
             prefix_feat_cond = pred_feat
 
@@ -815,28 +813,28 @@ class VoxCPMModel(nn.Module):
                 # return the last three predicted latent features to provide enough context for smooth decoding
                 pred_feat_chunk = torch.cat(pred_feat_seq[-streaming_prefix_len:], dim=1)
                 feat_pred = rearrange(pred_feat_chunk, "b t p d -> b d (t p)", b=B, p=self.patch_size)
-                
+
                 yield feat_pred, pred_feat_seq
-            
+
             stop_flag = self.stop_head(self.stop_actn(self.stop_proj(lm_hidden))).argmax(dim=-1)[0].cpu().item()
             if i > min_len and stop_flag == 1:
                 break
-    
+
             lm_hidden = self.base_lm.forward_step(
                 curr_embed[:, 0, :], torch.tensor([self.base_lm.kv_cache.step()], device=curr_embed.device)
             ).clone()
-           
+
 
             lm_hidden = self.fsq_layer(lm_hidden)
             residual_hidden = self.residual_lm.forward_step(
                 lm_hidden + curr_embed[:, 0, :], torch.tensor([self.residual_lm.kv_cache.step()], device=curr_embed.device)
             ).clone()
-                
+
         if not streaming:
             pred_feat_seq = torch.cat(pred_feat_seq, dim=1)  # b, t, p, d
-            feat_pred = rearrange(pred_feat_seq, "b t p d -> b d (t p)", b=B, p=self.patch_size)  
+            feat_pred = rearrange(pred_feat_seq, "b t p d -> b d (t p)", b=B, p=self.patch_size)
             yield feat_pred, pred_feat_seq.squeeze(0).cpu()
-            
+
 
     @classmethod
     def from_local(cls, path: str, optimize: bool = True, training: bool = False, lora_config: LoRAConfig = None):
@@ -862,11 +860,11 @@ class VoxCPMModel(nn.Module):
                     if "lora" not in name: # freeze non-LoRA weights
                         param.requires_grad = False
         model.audio_vae = model.audio_vae.to(torch.float32)
-        
+
         # Try to load from safetensors first, fallback to pytorch_model.bin
         safetensors_path = os.path.join(path, "model.safetensors")
         pytorch_model_path = os.path.join(path, "pytorch_model.bin")
-        
+
         if os.path.exists(safetensors_path) and SAFETENSORS_AVAILABLE:
             print(f"Loading model from safetensors: {safetensors_path}")
             model_state_dict = load_file(safetensors_path)
@@ -882,10 +880,10 @@ class VoxCPMModel(nn.Module):
             raise FileNotFoundError(
                 f"Model file not found. Expected either {safetensors_path} or {pytorch_model_path}"
             )
-            
+
         for kw, val in vae_state_dict.items():
             model_state_dict[f"audio_vae.{kw}"] = val
-        
+
         # LoRALinear holds weight/bias directly, compatible with nn.Linear state_dict keys.
         # Using strict=False since pretrained weights don't contain lora_A/lora_B.
         model.load_state_dict(model_state_dict, strict=False)
@@ -908,7 +906,7 @@ class VoxCPMModel(nn.Module):
         Load LoRA weights from file, supports calling after torch.compile.
         Uses named_parameters() to handle compile's _orig_mod wrapper.
         Supports both safetensors and pytorch formats.
-        
+
         Args:
             lora_path: Checkpoint path (directory or .safetensors/.ckpt file)
             device: Target device, defaults to model's current device
@@ -916,10 +914,10 @@ class VoxCPMModel(nn.Module):
             tuple: (loaded_keys, skipped_keys)
         """
         from pathlib import Path
-        
+
         device = device or self.device
         lora_path = Path(lora_path)
-        
+
         # Try safetensors first, then fallback to .ckpt
         if lora_path.is_dir():
             safetensors_file = lora_path / "lora_weights.safetensors"
@@ -927,7 +925,7 @@ class VoxCPMModel(nn.Module):
         else:
             safetensors_file = lora_path if lora_path.suffix == ".safetensors" else None
             ckpt_file = lora_path if lora_path.suffix in [".ckpt", ".pth"] else None
-        
+
         # Load from safetensors if available
         if safetensors_file and safetensors_file.exists() and SAFETENSORS_AVAILABLE:
             state_dict = load_file(str(safetensors_file), device=device)
@@ -938,11 +936,11 @@ class VoxCPMModel(nn.Module):
             raise FileNotFoundError(
                 f"LoRA checkpoint not found. Expected either {safetensors_file} or {ckpt_file}"
             )
-        
+
         # Build param mapping (handle torch.compile's _orig_mod prefix)
         model_params = dict(self.named_parameters())
         key_mapping = {k.replace("._orig_mod.", "."): k for k in model_params if "._orig_mod." in k}
-        
+
         loaded_keys, skipped_keys = [], []
         for key, value in state_dict.items():
             target_key = key if key in model_params else key_mapping.get(key)
@@ -951,7 +949,7 @@ class VoxCPMModel(nn.Module):
                 loaded_keys.append(key)
             else:
                 skipped_keys.append(key)
-        
+
         return loaded_keys, skipped_keys
 
     def set_lora_enabled(self, enabled: bool):
@@ -966,6 +964,6 @@ class VoxCPMModel(nn.Module):
 
     def get_lora_state_dict(self) -> dict:
         """Get all LoRA parameters (lora_A/lora_B)."""
-        return {name: param.data.clone() 
-                for name, param in self.named_parameters() 
+        return {name: param.data.clone()
+                for name, param in self.named_parameters()
                 if "lora_" in name}

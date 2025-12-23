@@ -29,7 +29,7 @@ class TrainingTracker:
         self.rank = rank
         self.step = 0
         # Record the time of the last log to calculate the interval
-        self._last_log_time: float | None = None
+        self._last_log_time: Optional[float] = None
 
     # ------------------------------------------------------------------ #
     # Logging helpers

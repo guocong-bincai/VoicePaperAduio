@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch.func import jvp
 from pydantic import BaseModel
+from typing import Optional, Tuple
 
 from .local_dit import VoxCPMLocDiT
 
@@ -56,7 +57,7 @@ class UnifiedCFM(torch.nn.Module):
         cond: torch.Tensor,
         temperature: float = 1.0,
         cfg_value: float = 1.0,
-        sway_sampling_coef: float = 1.0, 
+        sway_sampling_coef: float = 1.0,
         use_cfg_zero_star: bool = True,
     ):
         b, _ = mu.shape
@@ -116,7 +117,7 @@ class UnifiedCFM(torch.nn.Module):
 
                 dphi_dt = self.estimator(x_in, mu_in, t_in, cond_in, dt_in)
                 dphi_dt, cfg_dphi_dt = torch.split(dphi_dt, [x.size(0), x.size(0)], dim=0)
-                
+
                 if use_cfg_zero_star:
                     positive_flat = dphi_dt.view(b, -1)
                     negative_flat = cfg_dphi_dt.view(b, -1)
@@ -124,7 +125,7 @@ class UnifiedCFM(torch.nn.Module):
                     st_star = st_star.view(b, *([1] * (len(dphi_dt.shape) - 1)))
                 else:
                     st_star = 1.0
-                
+
                 dphi_dt = cfg_dphi_dt * st_star + cfg_value * (dphi_dt - cfg_dphi_dt * st_star)
 
             x = x - dt * dphi_dt
@@ -138,7 +139,7 @@ class UnifiedCFM(torch.nn.Module):
     # ------------------------------------------------------------------ #
     # Training loss
     # ------------------------------------------------------------------ #
-    def adaptive_loss_weighting(self, losses: torch.Tensor, mask: torch.Tensor | None = None, p: float = 0.0, epsilon: float = 1e-3):
+    def adaptive_loss_weighting(self, losses: torch.Tensor, mask: Optional[torch.Tensor] = None, p: float = 0.0, epsilon: float = 1e-3):
         weights = 1.0 / ((losses + epsilon).pow(p))
         if mask is not None:
             weights = weights * mask
@@ -170,8 +171,8 @@ class UnifiedCFM(torch.nn.Module):
         self,
         x1: torch.Tensor,
         mu: torch.Tensor,
-        cond: torch.Tensor | None = None,
-        tgt_mask: torch.Tensor | None = None,
+        cond: Optional[torch.Tensor] = None,
+        tgt_mask: Optional[torch.Tensor] = None,
         progress: float = 0.0,
     ):
         b, _, _ = x1.shape
