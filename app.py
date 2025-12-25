@@ -8,6 +8,8 @@ from pathlib import Path
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+# Add Homebrew bin to PATH for ffmpeg/ffprobe
+os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + "/opt/homebrew/bin"
 # Disable MPS to avoid "Output channels > 65536 not supported" error on macOS
 torch.backends.mps.enabled = False
 
