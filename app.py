@@ -161,6 +161,49 @@ def create_demo_interface(demo: VoxCPMDemo):
         #chk_normalize_zh span {
             font-weight: 600;
         }
+
+        /* Modern Language Switcher Styles */
+        .lang-container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding-right: 1rem;
+        }
+        #lang_selector {
+            border: none !important;
+            background: #f1f5f9 !important;
+            padding: 4px !important;
+            border-radius: 12px !important;
+            min-width: unset !important;
+        }
+        #lang_selector .wrap {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 4px !important;
+        }
+        #lang_selector label {
+            margin: 0 !important;
+            padding: 6px 16px !important;
+            border-radius: 8px !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            transition: all 0.2s ease !important;
+            cursor: pointer;
+        }
+        #lang_selector label.selected {
+            background: white !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+            color: #2563eb !important;
+            font-weight: 600 !important;
+        }
+        #lang_selector label span {
+            margin-left: 0 !important;
+        }
+        /* Hide the radio circle */
+        #lang_selector input[type="radio"] {
+            display: none !important;
+        }
         """,
         analytics_enabled=False
     ) as interface:
@@ -171,17 +214,16 @@ def create_demo_interface(demo: VoxCPMDemo):
         logo_path = Path(__file__).parent / "assets" / "voxcpm_logo.png"
         gr.HTML(f'<div class="logo-container"><img src="file={logo_path}" alt="VoxCPM Logo"></div>')
 
-        # Language selector
-        with gr.Row():
-            with gr.Column(scale=10):
-                pass
-            with gr.Column(scale=1, min_width=150):
-                lang_selector = gr.Radio(
-                    choices=[("English", "en"), ("中文", "zh")],
-                    value="en",
-                    label="Language",
-                    interactive=True
-                )
+        # Modern Language selector
+        with gr.Row(elem_classes="lang-container"):
+            lang_selector = gr.Radio(
+                choices=[("English", "en"), ("中文", "zh")],
+                value="en",
+                show_label=False,
+                container=False,
+                elem_id="lang_selector",
+                interactive=True
+            )
 
         # ==================== ENGLISH VERSION ====================
         with gr.Group(elem_id="group_en") as group_en:
